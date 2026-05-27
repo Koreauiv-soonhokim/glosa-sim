@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>GLOSA 시뮬레이션 결과</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; padding: 30px; background-color: #f8f9fa; display: flex; flex-direction: column; align-items: center;}
+        .container { width: 100%; max-width: 800px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);}
+        h2 { text-align: center; color: #333; margin-bottom: 20px;}
+        .road { width: 100%; height: 80px; background-color: #343a40; position: relative; margin-top: 15px; border-radius: 5px; overflow: hidden;}
+        .line { width: 100%; height: 2px; background-color: white; border-style: dashed; position: absolute; top: 39px; }
+        .stop-line { width: 5px; height: 100%; background-color: white; position: absolute; left: 80%; top: 0; }
+        .car { width: 45px; height: 24px; position: absolute; top: 28px; border-radius: 4px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);}
+        .car-control { background-color: #ff6b6b; }
+        .car-glosa { background-color: #4dabf7; }
+        .light { width: 18px; height: 18px; border-radius: 50%; background-color: green; position: absolute; left: 82%; top: 10px; border: 2px solid #fff; box-shadow: 0 0 10px green;}
+        .dashboard { margin-top: 10px; font-weight: bold; font-size: 1.2em; display: flex; justify-content: space-between;}
+        .stats { color: #666; font-size: 0.9em; margin-bottom: 10px;}
+        button { display: block; width: 100%; padding: 15px; font-size: 18px; font-weight: bold; cursor: pointer; background-color: #20c997; color: white; border: none; border-radius: 5px; margin-bottom: 20px;}
+        button:hover { background-color: #12b886; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>차량 통신(V2I) 기반 GLOSA 시스템 효과 검증</h2>
+        <button onclick="startSim()">시뮬레이션 시작 / 초기화</button>
+        
+        <div class="stats">▼ <b>통제집단 (일반 차량)</b> : 신호 예측 불가, 빨간불 앞 급정거 반복</div>
+        <div class="road">
+            <div class="stop-line"></div>
+            <div class="light" id="light1"></div>
+            <div class="line"></div>
+            <div class="car car-control" id="car1"></div>
+        </div>
+        <div class="dashboard">
+            <span style="color:#e03131;">누적 정차 횟수: <span id="stop1">0</span>회</span>
+        </div>
+
+        <br><hr style="border: 0; border-top: 1px solid #eee;"><br>
