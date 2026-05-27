@@ -2,30 +2,30 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>GLOSA 시뮬레이션 결과</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>GLOSA 시뮬레이션 데모</title>
     <style>
-        body { font-family: 'Malgun Gothic', sans-serif; padding: 30px; background-color: #f8f9fa; display: flex; flex-direction: column; align-items: center;}
-        .container { width: 100%; max-width: 800px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);}
-        h2 { text-align: center; color: #333; margin-bottom: 20px;}
+        body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background-color: #f8f9fa; display: flex; flex-direction: column; align-items: center; margin: 0;}
+        .container { width: 100%; max-width: 800px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); box-sizing: border-box;}
+        h2 { text-align: center; color: #333; margin-bottom: 20px; font-size: 1.5em;}
         .road { width: 100%; height: 80px; background-color: #343a40; position: relative; margin-top: 15px; border-radius: 5px; overflow: hidden;}
         .line { width: 100%; height: 2px; background-color: white; border-style: dashed; position: absolute; top: 39px; }
         .stop-line { width: 5px; height: 100%; background-color: white; position: absolute; left: 80%; top: 0; }
         .car { width: 45px; height: 24px; position: absolute; top: 28px; border-radius: 4px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);}
         .car-control { background-color: #ff6b6b; }
         .car-glosa { background-color: #4dabf7; }
-        .light { width: 18px; height: 18px; border-radius: 50%; background-color: green; position: absolute; left: 82%; top: 10px; border: 2px solid #fff; box-shadow: 0 0 10px green;}
-        .dashboard { margin-top: 10px; font-weight: bold; font-size: 1.2em; display: flex; justify-content: space-between;}
+        .light { width: 18px; height: 18px; border-radius: 50%; background-color: green; position: absolute; left: 82%; top: 10px; border: 2px solid #fff; box-shadow: 0 0 10px green; z-index: 5;}
+        .dashboard { margin-top: 10px; font-weight: bold; font-size: 1.1em; display: flex; justify-content: space-between;}
         .stats { color: #666; font-size: 0.9em; margin-bottom: 10px;}
-        button { display: block; width: 100%; padding: 15px; font-size: 18px; font-weight: bold; cursor: pointer; background-color: #20c997; color: white; border: none; border-radius: 5px; margin-bottom: 20px;}
+        button { display: block; width: 100%; padding: 15px; font-size: 16px; font-weight: bold; cursor: pointer; background-color: #20c997; color: white; border: none; border-radius: 5px; margin-bottom: 20px; z-index: 10; position: relative;}
         button:hover { background-color: #12b886; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>차량 통신(V2I) 기반 GLOSA 시스템 효과 검증</h2>
-        <button onclick="startSim()">시뮬레이션 시작 / 초기화</button>
+        <h2>차량 통신(V2I) 기반 GLOSA 효과 검증</h2>
+        <button onclick="startSim()">시뮬레이션 재시작 (초기화)</button>
         
-        <div class="stats">▼ <b>통제집단 (일반 차량)</b> : 신호 예측 불가, 빨간불 앞 급정거 반복</div>
+        <div class="stats">▼ <b>통제집단 (일반 차량)</b> : 신호 예측 불가, 빨간불 앞 급정거</div>
         <div class="road">
             <div class="stop-line"></div>
             <div class="light" id="light1"></div>
@@ -37,3 +37,81 @@
         </div>
 
         <br><hr style="border: 0; border-top: 1px solid #eee;"><br>
+
+        <div class="stats">▼ <b>실험집단 (GLOSA)</b> : 신호 사전 인지 후 서행, 무정차 통과</div>
+        <div class="road">
+            <div class="stop-line"></div>
+            <div class="light" id="light2"></div>
+            <div class="line"></div>
+            <div class="car car-glosa" id="car2"></div>
+        </div>
+        <div class="dashboard">
+            <span style="color:#1971c2;">누적 정차 횟수: <span id="stop2">0</span>회</span>
+        </div>
+    </div>
+
+    <script>
+        let pos1 = 0, pos2 = 0;
+        let stopCount1 = 0, stopCount2 = 0;
+        let isRed = false;
+        let isStopped1 = false, isStopped2 = false;
+        let simInterval = null, lightInterval = null;
+
+        function startSim() {
+            if (simInterval) clearInterval(simInterval); 
+            if (lightInterval) clearTimeout(lightInterval);
+            
+            pos1 = 0; pos2 = 0; stopCount1 = 0; stopCount2 = 0; 
+            isRed = false; isStopped1 = false; isStopped2 = false;
+            
+            document.getElementById('car1').style.left = '0%';
+            document.getElementById('car2').style.left = '0%';
+            document.getElementById('stop1').innerText = '0';
+            document.getElementById('stop2').innerText = '0';
+            updateLightColor('green');
+
+            function toggleLight() {
+                isRed = !isRed;
+                updateLightColor(isRed ? 'red' : 'green');
+                lightInterval = setTimeout(toggleLight, isRed ? 3000 : 4000);
+            }
+            lightInterval = setTimeout(toggleLight, 4000);
+
+            simInterval = setInterval(() => {
+                let speed1 = 0.35;
+                let speed2 = 0.35;
+
+                if (isRed && pos1 >= 75 && pos1 < 80) speed1 = 0; 
+                
+                if (isRed && pos2 >= 20 && pos2 < 78) speed2 = 0.06; 
+                if (isRed && pos2 >= 78 && pos2 < 80) speed2 = 0; 
+
+                if (speed1 === 0) {
+                    if (!isStopped1) { stopCount1++; document.getElementById('stop1').innerText = stopCount1; isStopped1 = true; }
+                } else { isStopped1 = false; pos1 += speed1; }
+
+                if (speed2 === 0) {
+                    if (!isStopped2) { stopCount2++; document.getElementById('stop2').innerText = stopCount2; isStopped2 = true; }
+                } else { isStopped2 = false; pos2 += speed2; }
+
+                if (pos1 > 100) pos1 = -10;
+                if (pos2 > 100) pos2 = -10;
+
+                document.getElementById('car1').style.left = pos1 + '%';
+                document.getElementById('car2').style.left = pos2 + '%';
+            }, 16);
+        }
+
+        function updateLightColor(color) {
+            let lights = document.getElementsByClassName('light');
+            for(let i=0; i<lights.length; i++) {
+                lights[i].style.backgroundColor = color;
+                lights[i].style.boxShadow = `0 0 12px ${color}`;
+            }
+        }
+
+        // 페이지 접속 시 묻지도 따지지도 않고 바로 시뮬레이션 자동 시작!
+        window.onload = startSim;
+    </script>
+</body>
+</html>
