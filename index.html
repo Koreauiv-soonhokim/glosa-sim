@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GLOSA 시뮬레이션 데모</title>
+    <title>GLOSA 기반 시뮬레이션</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background-color: #f8f9fa; display: flex; flex-direction: column; align-items: center; margin: 0;}
         .container { width: 100%; max-width: 800px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); box-sizing: border-box;}
@@ -15,18 +15,22 @@
         .car-control { background-color: #ff6b6b; }
         .car-glosa { background-color: #4dabf7; }
         .light { width: 18px; height: 18px; border-radius: 50%; background-color: green; position: absolute; left: 82%; top: 10px; border: 2px solid #fff; box-shadow: 0 0 10px green; z-index: 5;}
-        .dashboard { margin-top: 10px; font-weight: bold; font-size: 1.1em; display: flex; justify-content: space-between;}
-        .stats { color: #666; font-size: 0.9em; margin-bottom: 10px;}
-        button { display: block; width: 100%; padding: 15px; font-size: 16px; font-weight: bold; cursor: pointer; background-color: #20c997; color: white; border: none; border-radius: 5px; margin-bottom: 20px; z-index: 10; position: relative;}
+        
+        .dashboard { margin-top: 10px; padding: 10px; background: #f1f3f5; border-radius: 5px; font-weight: bold; font-size: 1.1em; display: flex; justify-content: space-between;}
+        .metric-stop { color: #495057; }
+        .metric-co2 { color: #d9480f; }
+        
+        .stats { color: #666; font-size: 0.9em; margin-bottom: 5px; margin-top: 15px;}
+        button { display: block; width: 100%; padding: 15px; font-size: 16px; font-weight: bold; cursor: pointer; background-color: #20c997; color: white; border: none; border-radius: 5px; margin-bottom: 10px; z-index: 10; position: relative;}
         button:hover { background-color: #12b886; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>GLOSA 기반 검증 시뮬레이션</h2>
+        <h2>V2I 기반 GLOSA 시스템 실시간 CO2 절감 검증</h2>
         <button onclick="startSim()">시뮬레이션 시작 / 초기화</button>
         
-        <div class="stats">▼ <b>통제집단 (일반 차량)</b> : 신호 예측 불가, 빨간불 앞 급정거</div>
+        <div class="stats">▼ <b>통제집단 (일반 차량)</b> : 빨간불 앞 급정거 및 공회전 반복</div>
         <div class="road">
             <div class="stop-line"></div>
             <div class="light" id="light1"></div>
@@ -34,12 +38,13 @@
             <div class="car car-control" id="car1"></div>
         </div>
         <div class="dashboard">
-            <span style="color:#e03131;">누적 정차 횟수: <span id="stop1">0</span>회</span>
+            <span class="metric-stop">누적 정차: <span id="stop1" style="color:#e03131;">0</span>회</span>
+            <span class="metric-co2">CO2 배출량: <span id="co2_1">0.0</span> g</span>
         </div>
 
-        <br><hr style="border: 0; border-top: 1px solid #eee;"><br>
+        <br><hr style="border: 0; border-top: 1px solid #ddd;"><br>
 
-        <div class="stats">▼ <b>실험집단 (GLOSA)</b> : 사전 서행하지만, 신호 대기가 길면 부득이하게 정차함 (현실 반영)</div>
+        <div class="stats">▼ <b>실험집단 (GLOSA)</b> : 사전 서행으로 무정차 통과 유도 (정차 최소화)</div>
         <div class="road">
             <div class="stop-line"></div>
             <div class="light" id="light2"></div>
@@ -47,33 +52,39 @@
             <div class="car car-glosa" id="car2"></div>
         </div>
         <div class="dashboard">
-            <span style="color:#1971c2;">누적 정차 횟수: <span id="stop2">0</span>회</span>
+            <span class="metric-stop">누적 정차: <span id="stop2" style="color:#1971c2;">0</span>회</span>
+            <span class="metric-co2">CO2 배출량: <span id="co2_2">0.0</span> g</span>
         </div>
     </div>
 
     <script>
         let pos1 = 0, pos2 = 0;
         let stopCount1 = 0, stopCount2 = 0;
+        let co2_1 = 0.0, co2_2 = 0.0;
         let isRed = false;
         let isStopped1 = false, isStopped2 = false;
         let simInterval = null, lightInterval = null;
 
+        // COPERT 기반 실시간 배출량 파라미터 (프레임당 증가량)
+        const CO2_CRUISE = 0.05;      // 주행 중 배출 (약 3g/s)
+        const CO2_IDLE = 0.02;        // 정차 중 공회전 배출 (약 1.2g/s)
+        const CO2_STOP_PENALTY = 25;  // 정지 후 재출발 시 급가속 페널티 (1회당 25g)
+
         function startSim() {
-            // 기존 타이머 초기화
             if (simInterval) clearInterval(simInterval); 
             if (lightInterval) clearTimeout(lightInterval);
             
-            // 변수 초기화
-            pos1 = 0; pos2 = 0; stopCount1 = 0; stopCount2 = 0; 
+            pos1 = 0; pos2 = 0; stopCount1 = 0; stopCount2 = 0; co2_1 = 0; co2_2 = 0;
             isRed = false; isStopped1 = false; isStopped2 = false;
             
             document.getElementById('car1').style.left = '0%';
             document.getElementById('car2').style.left = '0%';
             document.getElementById('stop1').innerText = '0';
             document.getElementById('stop2').innerText = '0';
+            document.getElementById('co2_1').innerText = '0.0';
+            document.getElementById('co2_2').innerText = '0.0';
             updateLightColor('green');
 
-            // 신호등 주기 (초록불 4초, 빨간불 3.5초 - 현실적 간섭 유도)
             function toggleLight() {
                 isRed = !isRed;
                 updateLightColor(isRed ? 'red' : 'green');
@@ -81,38 +92,55 @@
             }
             lightInterval = setTimeout(toggleLight, 4000);
 
-            // 시뮬레이션 구동 (16ms마다 갱신)
             simInterval = setInterval(() => {
                 let speed1 = 0.35;
                 let speed2 = 0.35;
 
-                // [통제집단] 빨간불에 정지선 도달 시 100% 급정거
+                // 차량 로직
                 if (isRed && pos1 >= 75 && pos1 < 80) speed1 = 0; 
-                
-                // [실험집단] 빨간불 감지 시 20% 지점부터 미리 서행 (속도를 0.12로 줄임)
-                if (isRed && pos2 >= 20 && pos2 < 78) {
-                    speed2 = 0.12; 
-                }
-                // [현실성 패치] 서행하며 기어왔는데도 신호가 안 바뀌어서 정지선에 도달해버리면 결국 정차함!
-                if (isRed && pos2 >= 78 && pos2 < 80) {
-                    speed2 = 0; 
-                }
+                if (isRed && pos2 >= 20 && pos2 < 78) speed2 = 0.12; 
+                if (isRed && pos2 >= 78 && pos2 < 80) speed2 = 0; 
 
-                // 카운팅 로직 (완전히 멈췄을 때만 1회 카운트)
+                // 통제집단 카운팅 및 CO2 계산
                 if (speed1 === 0) {
-                    if (!isStopped1) { stopCount1++; document.getElementById('stop1').innerText = stopCount1; isStopped1 = true; }
-                } else { isStopped1 = false; pos1 += speed1; }
+                    co2_1 += CO2_IDLE; // 공회전 중
+                    if (!isStopped1) { 
+                        stopCount1++; 
+                        co2_1 += CO2_STOP_PENALTY; // 멈추는 순간 페널티 폭탄!
+                        document.getElementById('stop1').innerText = stopCount1; 
+                        isStopped1 = true; 
+                    }
+                } else { 
+                    co2_1 += CO2_CRUISE; // 주행 중
+                    isStopped1 = false; 
+                    pos1 += speed1; 
+                }
 
+                // 실험집단 카운팅 및 CO2 계산
                 if (speed2 === 0) {
-                    if (!isStopped2) { stopCount2++; document.getElementById('stop2').innerText = stopCount2; isStopped2 = true; }
-                } else { isStopped2 = false; pos2 += speed2; }
+                    co2_2 += CO2_IDLE; 
+                    if (!isStopped2) { 
+                        stopCount2++; 
+                        co2_2 += CO2_STOP_PENALTY; 
+                        document.getElementById('stop2').innerText = stopCount2; 
+                        isStopped2 = true; 
+                    }
+                } else { 
+                    co2_2 += CO2_CRUISE; 
+                    isStopped2 = false; 
+                    pos2 += speed2; 
+                }
 
                 // 화면 밖으로 나가면 다시 처음으로
                 if (pos1 > 100) pos1 = -10;
                 if (pos2 > 100) pos2 = -10;
 
+                // UI 업데이트
                 document.getElementById('car1').style.left = pos1 + '%';
                 document.getElementById('car2').style.left = pos2 + '%';
+                document.getElementById('co2_1').innerText = co2_1.toFixed(1);
+                document.getElementById('co2_2').innerText = co2_2.toFixed(1);
+
             }, 16);
         }
 
@@ -123,8 +151,6 @@
                 lights[i].style.boxShadow = `0 0 12px ${color}`;
             }
         }
-        
-        // 이전 버전에 있던 'window.onload = startSim;' 코드를 완전히 삭제하여 자동 시작을 막았습니다.
     </script>
 </body>
 </html>
