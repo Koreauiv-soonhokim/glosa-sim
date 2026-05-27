@@ -2,7 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <title>GLOSA 시뮬레이션 데모</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLOSA 시뮬레이션 데모</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background-color: #f8f9fa; display: flex; flex-direction: column; align-items: center; margin: 0;}
         .container { width: 100%; max-width: 800px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); box-sizing: border-box;}
@@ -22,8 +23,8 @@
 </head>
 <body>
     <div class="container">
-        <h2>GLOSA 기반 시뮬레이션</h2>
-        <button onclick="startSim()">시뮬레이션 재시작 (초기화)</button>
+        <h2>GLOSA 기반 검증 시뮬레이션</h2>
+        <button onclick="startSim()">시뮬레이션 시작 / 초기화</button>
         
         <div class="stats">▼ <b>통제집단 (일반 차량)</b> : 신호 예측 불가, 빨간불 앞 급정거</div>
         <div class="road">
@@ -38,7 +39,7 @@
 
         <br><hr style="border: 0; border-top: 1px solid #eee;"><br>
 
-        <div class="stats">▼ <b>실험집단 (GLOSA)</b> : 신호 사전 인지 후 서행, 무정차 통과</div>
+        <div class="stats">▼ <b>실험집단 (GLOSA)</b> : 사전 서행하지만, 신호 대기가 길면 부득이하게 정차함 (현실 반영)</div>
         <div class="road">
             <div class="stop-line"></div>
             <div class="light" id="light2"></div>
@@ -58,9 +59,11 @@
         let simInterval = null, lightInterval = null;
 
         function startSim() {
+            // 기존 타이머 초기화
             if (simInterval) clearInterval(simInterval); 
             if (lightInterval) clearTimeout(lightInterval);
             
+            // 변수 초기화
             pos1 = 0; pos2 = 0; stopCount1 = 0; stopCount2 = 0; 
             isRed = false; isStopped1 = false; isStopped2 = false;
             
@@ -70,22 +73,32 @@
             document.getElementById('stop2').innerText = '0';
             updateLightColor('green');
 
+            // 신호등 주기 (초록불 4초, 빨간불 3.5초 - 현실적 간섭 유도)
             function toggleLight() {
                 isRed = !isRed;
                 updateLightColor(isRed ? 'red' : 'green');
-                lightInterval = setTimeout(toggleLight, isRed ? 3000 : 4000);
+                lightInterval = setTimeout(toggleLight, isRed ? 3500 : 4000);
             }
             lightInterval = setTimeout(toggleLight, 4000);
 
+            // 시뮬레이션 구동 (16ms마다 갱신)
             simInterval = setInterval(() => {
                 let speed1 = 0.35;
                 let speed2 = 0.35;
 
+                // [통제집단] 빨간불에 정지선 도달 시 100% 급정거
                 if (isRed && pos1 >= 75 && pos1 < 80) speed1 = 0; 
                 
-                if (isRed && pos2 >= 20 && pos2 < 78) speed2 = 0.06; 
-                if (isRed && pos2 >= 78 && pos2 < 80) speed2 = 0; 
+                // [실험집단] 빨간불 감지 시 20% 지점부터 미리 서행 (속도를 0.12로 줄임)
+                if (isRed && pos2 >= 20 && pos2 < 78) {
+                    speed2 = 0.12; 
+                }
+                // [현실성 패치] 서행하며 기어왔는데도 신호가 안 바뀌어서 정지선에 도달해버리면 결국 정차함!
+                if (isRed && pos2 >= 78 && pos2 < 80) {
+                    speed2 = 0; 
+                }
 
+                // 카운팅 로직 (완전히 멈췄을 때만 1회 카운트)
                 if (speed1 === 0) {
                     if (!isStopped1) { stopCount1++; document.getElementById('stop1').innerText = stopCount1; isStopped1 = true; }
                 } else { isStopped1 = false; pos1 += speed1; }
@@ -94,6 +107,7 @@
                     if (!isStopped2) { stopCount2++; document.getElementById('stop2').innerText = stopCount2; isStopped2 = true; }
                 } else { isStopped2 = false; pos2 += speed2; }
 
+                // 화면 밖으로 나가면 다시 처음으로
                 if (pos1 > 100) pos1 = -10;
                 if (pos2 > 100) pos2 = -10;
 
@@ -109,9 +123,8 @@
                 lights[i].style.boxShadow = `0 0 12px ${color}`;
             }
         }
-
-        // 페이지 접속 시 묻지도 따지지도 않고 바로 시뮬레이션 자동 시작!
-        window.onload = startSim;
+        
+        // 이전 버전에 있던 'window.onload = startSim;' 코드를 완전히 삭제하여 자동 시작을 막았습니다.
     </script>
 </body>
 </html>
