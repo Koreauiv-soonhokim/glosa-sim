@@ -3,12 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GLOSA 기반 시뮬레이션</title>
+    <title>GLOSA 실시간 시뮬레이션 & CO2 산출</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background-color: #f8f9fa; display: flex; flex-direction: column; align-items: center; margin: 0;}
         .container { width: 100%; max-width: 800px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); box-sizing: border-box;}
-        h2 { text-align: center; color: #333; margin-bottom: 20px; font-size: 1.5em;}
-        .road { width: 100%; height: 80px; background-color: #343a40; position: relative; margin-top: 15px; border-radius: 5px; overflow: hidden;}
+        h2 { text-align: center; color: #333; margin-bottom: 15px; font-size: 1.4em;}
+        
+        /* 설계 조건 박스 */
+        .info-box { background: #e9ecef; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9em; color: #495057; line-height: 1.5; border-left: 4px solid #20c997;}
+        .info-box ul { margin: 5px 0 0 0; padding-left: 20px; }
+        
+        .road { width: 100%; height: 80px; background-color: #343a40; position: relative; margin-top: 10px; border-radius: 5px; overflow: hidden;}
         .line { width: 100%; height: 2px; background-color: white; border-style: dashed; position: absolute; top: 39px; }
         .stop-line { width: 5px; height: 100%; background-color: white; position: absolute; left: 80%; top: 0; }
         .car { width: 45px; height: 24px; position: absolute; top: 28px; border-radius: 4px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);}
@@ -16,21 +21,35 @@
         .car-glosa { background-color: #4dabf7; }
         .light { width: 18px; height: 18px; border-radius: 50%; background-color: green; position: absolute; left: 82%; top: 10px; border: 2px solid #fff; box-shadow: 0 0 10px green; z-index: 5;}
         
-        .dashboard { margin-top: 10px; padding: 10px; background: #f1f3f5; border-radius: 5px; font-weight: bold; font-size: 1.1em; display: flex; justify-content: space-between;}
-        .metric-stop { color: #495057; }
-        .metric-co2 { color: #d9480f; }
+        /* 대시보드 세팅 */
+        .dashboard { margin-top: 10px; padding: 10px; background: #f1f3f5; border-radius: 5px; font-weight: bold; font-size: 1em; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;}
+        .metric { display: flex; flex-direction: column; align-items: center; min-width: 80px;}
+        .metric-title { font-size: 0.8em; color: #868e96; }
+        .metric-value { font-size: 1.2em; }
         
-        .stats { color: #666; font-size: 0.9em; margin-bottom: 5px; margin-top: 15px;}
+        .stats { color: #333; font-size: 0.95em; margin-bottom: 5px; margin-top: 20px;}
         button { display: block; width: 100%; padding: 15px; font-size: 16px; font-weight: bold; cursor: pointer; background-color: #20c997; color: white; border: none; border-radius: 5px; margin-bottom: 10px; z-index: 10; position: relative;}
         button:hover { background-color: #12b886; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>V2I 기반 GLOSA 시스템 실시간 CO2 절감 검증</h2>
+        <h2>V2I 기반 GLOSA 시스템 실효성 검증</h2>
+        
+        <div class="info-box">
+            <strong>[시뮬레이션 설계 조건]</strong>
+            <ul>
+                <li><b>구간 환경:</b> 총 1km 단일 직선 도로 (800m 지점 정지선 및 신호등 배치)</li>
+                <li><b>기준 속도:</b> 제한속도 60 km/h (GLOSA 서행 시 20 km/h로 감속)</li>
+                <li><b>배출 모델:</b> 유럽환경청(EEA) COPERT 모델 산출식 적용<br>
+                    <span style="font-size:0.9em; color:#868e96;">* 주행: 3g/s, 공회전: 1.2g/s, Stop-and-Go 페널티: 25g/회</span>
+                </li>
+            </ul>
+        </div>
+
         <button onclick="startSim()">시뮬레이션 시작 / 초기화</button>
         
-        <div class="stats">▼ <b>통제집단 (일반 차량)</b> : 빨간불 앞 급정거 및 공회전 반복</div>
+        <div class="stats">▼ <b>통제집단 (일반 차량)</b> : 앞만 보고 주행 (빨간불 앞 급정거)</div>
         <div class="road">
             <div class="stop-line"></div>
             <div class="light" id="light1"></div>
@@ -38,13 +57,14 @@
             <div class="car car-control" id="car1"></div>
         </div>
         <div class="dashboard">
-            <span class="metric-stop">누적 정차: <span id="stop1" style="color:#e03131;">0</span>회</span>
-            <span class="metric-co2">CO2 배출량: <span id="co2_1">0.0</span> g</span>
+            <div class="metric"><span class="metric-title">실시간 시속</span><span class="metric-value"><span id="speed_1">0</span> km/h</span></div>
+            <div class="metric"><span class="metric-title">누적 정차</span><span class="metric-value" style="color:#e03131;"><span id="stop1">0</span> 회</span></div>
+            <div class="metric"><span class="metric-title">CO2 누적 배출량</span><span class="metric-value" style="color:#d9480f;"><span id="co2_1">0.0</span> g</span></div>
         </div>
 
-        <br><hr style="border: 0; border-top: 1px solid #ddd;"><br>
+        <br><hr style="border: 0; border-top: 1px solid #ddd;">
 
-        <div class="stats">▼ <b>실험집단 (GLOSA)</b> : 사전 서행으로 무정차 통과 유도 (정차 최소화)</div>
+        <div class="stats">▼ <b>실험집단 (GLOSA)</b> : V2I 통신으로 신호 잔여시간 인지 후 능동 속도 제어</div>
         <div class="road">
             <div class="stop-line"></div>
             <div class="light" id="light2"></div>
@@ -52,8 +72,9 @@
             <div class="car car-glosa" id="car2"></div>
         </div>
         <div class="dashboard">
-            <span class="metric-stop">누적 정차: <span id="stop2" style="color:#1971c2;">0</span>회</span>
-            <span class="metric-co2">CO2 배출량: <span id="co2_2">0.0</span> g</span>
+            <div class="metric"><span class="metric-title">실시간 시속</span><span class="metric-value"><span id="speed_2">0</span> km/h</span></div>
+            <div class="metric"><span class="metric-title">누적 정차</span><span class="metric-value" style="color:#1971c2;"><span id="stop2">0</span> 회</span></div>
+            <div class="metric"><span class="metric-title">CO2 누적 배출량</span><span class="metric-value" style="color:#d9480f;"><span id="co2_2">0.0</span> g</span></div>
         </div>
     </div>
 
@@ -65,10 +86,9 @@
         let isStopped1 = false, isStopped2 = false;
         let simInterval = null, lightInterval = null;
 
-        // COPERT 기반 실시간 배출량 파라미터 (프레임당 증가량)
-        const CO2_CRUISE = 0.05;      // 주행 중 배출 (약 3g/s)
-        const CO2_IDLE = 0.02;        // 정차 중 공회전 배출 (약 1.2g/s)
-        const CO2_STOP_PENALTY = 25;  // 정지 후 재출발 시 급가속 페널티 (1회당 25g)
+        const CO2_CRUISE = 0.05;      
+        const CO2_IDLE = 0.02;        
+        const CO2_STOP_PENALTY = 25;  
 
         function startSim() {
             if (simInterval) clearInterval(simInterval); 
@@ -83,6 +103,8 @@
             document.getElementById('stop2').innerText = '0';
             document.getElementById('co2_1').innerText = '0.0';
             document.getElementById('co2_2').innerText = '0.0';
+            document.getElementById('speed_1').innerText = '0';
+            document.getElementById('speed_2').innerText = '0';
             updateLightColor('green');
 
             function toggleLight() {
@@ -93,25 +115,31 @@
             lightInterval = setTimeout(toggleLight, 4000);
 
             simInterval = setInterval(() => {
-                let speed1 = 0.35;
-                let speed2 = 0.35;
+                let speed1 = 0.35; // 제한속도 60km/h 기준
+                let speed2 = 0.35; 
 
-                // 차량 로직
+                // 차량 주행 및 감속 로직
                 if (isRed && pos1 >= 75 && pos1 < 80) speed1 = 0; 
-                if (isRed && pos2 >= 20 && pos2 < 78) speed2 = 0.12; 
+                if (isRed && pos2 >= 20 && pos2 < 78) speed2 = 0.12; // 20km/h로 서행
                 if (isRed && pos2 >= 78 && pos2 < 80) speed2 = 0; 
+
+                // 실시간 속도(km/h) 환산 (최대 0.35를 60km/h로 비례 계산)
+                let displaySpeed1 = Math.round((speed1 / 0.35) * 60);
+                let displaySpeed2 = Math.round((speed2 / 0.35) * 60);
+                document.getElementById('speed_1').innerText = displaySpeed1;
+                document.getElementById('speed_2').innerText = displaySpeed2;
 
                 // 통제집단 카운팅 및 CO2 계산
                 if (speed1 === 0) {
-                    co2_1 += CO2_IDLE; // 공회전 중
+                    co2_1 += CO2_IDLE; 
                     if (!isStopped1) { 
                         stopCount1++; 
-                        co2_1 += CO2_STOP_PENALTY; // 멈추는 순간 페널티 폭탄!
+                        co2_1 += CO2_STOP_PENALTY; 
                         document.getElementById('stop1').innerText = stopCount1; 
                         isStopped1 = true; 
                     }
                 } else { 
-                    co2_1 += CO2_CRUISE; // 주행 중
+                    co2_1 += CO2_CRUISE; 
                     isStopped1 = false; 
                     pos1 += speed1; 
                 }
@@ -131,11 +159,9 @@
                     pos2 += speed2; 
                 }
 
-                // 화면 밖으로 나가면 다시 처음으로
                 if (pos1 > 100) pos1 = -10;
                 if (pos2 > 100) pos2 = -10;
 
-                // UI 업데이트
                 document.getElementById('car1').style.left = pos1 + '%';
                 document.getElementById('car2').style.left = pos2 + '%';
                 document.getElementById('co2_1').innerText = co2_1.toFixed(1);
